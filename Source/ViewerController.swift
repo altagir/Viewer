@@ -17,7 +17,7 @@ public protocol ViewerControllerDelegate: class {
 public class ViewerController: UIViewController {
     static let domain = "com.3lvis.Viewer"
     fileprivate static let HeaderHeight = CGFloat(64)
-    fileprivate static let FooterHeight = CGFloat(50)
+    fileprivate static let FooterHeight = CGFloat(100)
     fileprivate static let DraggingMargin = CGFloat(60)
 
     fileprivate var isSlideshow: Bool

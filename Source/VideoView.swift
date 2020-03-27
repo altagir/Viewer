@@ -94,9 +94,13 @@ class VideoView: UIView {
     override func observeValue(forKeyPath keyPath: String?, of object: Any?, change _: [NSKeyValueChangeKey: Any]?, context _: UnsafeMutableRawPointer?) {
 
         if keyPath == VideoView.audioSessionVolumeKeyPath {
-            #if os(iOS)
-            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
-            #endif
+			if #available(iOS 10.0, *) {
+				#if os(iOS)
+				try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+				#endif
+			} else {
+				// Fallback on earlier versions
+			}
             return
         }
 
@@ -192,9 +196,13 @@ class VideoView: UIView {
         self.playerLayer.player?.seek(to: CMTime.zero)
         self.playerLayer.player = nil
 
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setCategory(.soloAmbient, mode: .default, options: [])
-        #endif
+		if #available(iOS 10.0, *) {
+			#if os(iOS)
+			try? AVAudioSession.sharedInstance().setCategory(.soloAmbient, mode: .default, options: [])
+			#endif
+		} else {
+			// Fallback on earlier versions
+		}
     }
 
     func play() {
