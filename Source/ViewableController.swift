@@ -17,9 +17,10 @@ protocol ViewableControllerDataSource: class {
     func viewableControllerShouldAutoplayVideo(_ viewableController: ViewableController) -> Bool
 }
 
-class ViewableController: UIViewController {
+class ViewableController: UIViewController, UIGestureRecognizerDelegate {
     static let playerItemStatusKeyPath = "status"
-    private static let FooterViewHeight = CGFloat(50.0)
+
+	public var tintColor: UIColor? = nil
 
     weak var delegate: ViewableControllerDelegate?
     weak var dataSource: ViewableControllerDataSource?
@@ -49,6 +50,7 @@ class ViewableController: UIViewController {
         view.contentMode = .scaleAspectFit
         view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.isUserInteractionEnabled = true
+		view.tintColor = tintColor
 
         return view
     }()
@@ -170,6 +172,9 @@ class ViewableController: UIViewController {
         return max(3.0, max(widthFactor, heightFactor))
     }
 
+	private var tapRecognizer: UITapGestureRecognizer?
+	private var doubleTapRecognizer: UITapGestureRecognizer?
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -187,16 +192,18 @@ class ViewableController: UIViewController {
         self.view.addSubview(self.pauseButton)
         self.view.addSubview(self.videoProgressView)
 
-        let tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(ViewableController.tapAction))
-        tapRecognizer.numberOfTapsRequired = 1
-        self.view.addGestureRecognizer(tapRecognizer)
+        tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(ViewableController.tapAction))
+        tapRecognizer!.numberOfTapsRequired = 1
+		tapRecognizer!.delegate = self
+        self.view.addGestureRecognizer(tapRecognizer!)
 
         if viewable?.type == .image {
-            let doubleTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(ViewableController.doubleTapAction))
-            doubleTapRecognizer.numberOfTapsRequired = 2
-            self.zoomingScrollView.addGestureRecognizer(doubleTapRecognizer)
+            doubleTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(ViewableController.doubleTapAction))
+            doubleTapRecognizer!.numberOfTapsRequired = 2
+            doubleTapRecognizer!.delegate = self
+            self.zoomingScrollView.addGestureRecognizer(doubleTapRecognizer!)
 
-            tapRecognizer.require(toFail: doubleTapRecognizer)
+            tapRecognizer!.require(toFail: doubleTapRecognizer!)
         }
     }
 
@@ -270,7 +277,7 @@ class ViewableController: UIViewController {
         self.repeatButton.frame = CGRect(x: (self.view.frame.size.width - buttonWidth) / 2, y: (self.view.frame.size.height - buttonHeight) / 2, width: buttonHeight, height: buttonHeight)
         self.pauseButton.frame = CGRect(x: (self.view.frame.size.width - buttonWidth) / 2, y: (self.view.frame.size.height - buttonHeight) / 2, width: buttonHeight, height: buttonHeight)
 
-        self.videoProgressView.frame = CGRect(x: 0, y: (self.view.frame.height - ViewableController.FooterViewHeight - VideoProgressView.height), width: self.view.frame.width, height: VideoProgressView.height)
+        self.videoProgressView.frame = CGRect(x: 0, y: (self.view.frame.height / 2), width: self.view.frame.width, height: VideoProgressView.height)
     }
 
     func willDismiss() {

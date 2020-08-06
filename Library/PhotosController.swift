@@ -179,6 +179,9 @@ extension PhotosController: ViewerControllerDataSource {
 }
 
 extension PhotosController: ViewerControllerDelegate {
+
+	func viewerControllerendEditing(_ viewerController: ViewerController) {}
+
     func viewerController(_: ViewerController, didChangeFocusTo _: IndexPath) {}
 
     func viewerControllerDidDismiss(_: ViewerController) {

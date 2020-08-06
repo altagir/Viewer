@@ -8,6 +8,7 @@ public protocol ViewerControllerDataSource: class {
 
 public protocol ViewerControllerDelegate: class {
     func viewerController(_ viewerController: ViewerController, didChangeFocusTo indexPath: IndexPath)
+    func viewerControllerendEditing(_ viewerController: ViewerController)
     func viewerControllerDidDismiss(_ viewerController: ViewerController)
     func viewerController(_ viewerController: ViewerController, didFailDisplayingViewableAt indexPath: IndexPath, error: NSError)
     func viewerController(_ viewerController: ViewerController, didLongPressViewableAt indexPath: IndexPath)
@@ -16,9 +17,9 @@ public protocol ViewerControllerDelegate: class {
 /// The ViewerController takes care of displaying the user's photos and videos in full-screen. You can swipe right or left to navigate between them.
 public class ViewerController: UIViewController {
     static let domain = "com.3lvis.Viewer"
-    fileprivate static let HeaderHeight = CGFloat(64)
-    fileprivate static let FooterHeight = CGFloat(100)
-    fileprivate static let DraggingMargin = CGFloat(60)
+    static let HeaderHeight = CGFloat(40)
+
+	fileprivate static let DraggingMargin = CGFloat(60)
 
     fileprivate var isSlideshow: Bool
 
@@ -128,6 +129,9 @@ public class ViewerController: UIViewController {
     public var headerView: UIView?
 
     public var footerView: UIView?
+    public var footerViewDistToBottom: NSLayoutConstraint?
+
+	public var tintColor: UIColor? = nil
 
     private lazy var defaultHeaderView: DefaultHeaderView = {
         let defaultHeaderView = DefaultHeaderView()
@@ -193,9 +197,42 @@ public class ViewerController: UIViewController {
             }
         #endif
 
+				NotificationCenter.default.addObserver(
+					forName: UIResponder.keyboardWillShowNotification,
+					object: nil,
+					queue: nil,
+					using: { [weak self] notification in
+						let key = UIResponder.keyboardFrameEndUserInfoKey
+						guard let keyboardSizeValue = notification.userInfo?[key] as? NSValue else
+						{
+							return
+						}
+
+						let keyboardSize = keyboardSizeValue.cgRectValue
+						self?.keyboardWillShow(withSize: keyboardSize.size)
+				})
+				NotificationCenter.default.addObserver(
+					forName: UIResponder.keyboardWillHideNotification,
+					object: nil,
+					queue: nil,
+					using: { [weak self] _ in
+						self?.keyboardWillHide()
+				})
+
         let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(longPress(gesture:)))
         self.view.addGestureRecognizer(recognizer)
     }
+
+	deinit {
+		NotificationCenter.default.removeObserver(
+				self,
+				name: UIResponder.keyboardWillHideNotification,
+				object: nil)
+		NotificationCenter.default.removeObserver(
+				self,
+				name: UIResponder.keyboardWillShowNotification,
+				object: nil)
+	}
 
     #if os(tvOS)
     @objc func menu(gesture: UITapGestureRecognizer) {
@@ -276,6 +313,28 @@ public class ViewerController: UIViewController {
         let viewableController = self.findOrCreateViewableController(indexPath)
         viewableController.display()
     }
+
+	public func didTap() {
+		findOrCreateViewableController(currentIndexPath).tapAction()
+	}
+
+	public func didDoubleTap(_ recognizer: UITapGestureRecognizer) {
+		findOrCreateViewableController(currentIndexPath).doubleTapAction(recognizer: recognizer)
+	}
+
+	private func keyboardWillShow(withSize size: CGSize) {
+		footerViewDistToBottom?.constant = -size.height 
+		UIView.animate(withDuration: 1.25) { [weak self] in
+			self?.view?.layoutIfNeeded()
+		}
+	}
+
+	private func keyboardWillHide() {
+		footerViewDistToBottom?.constant = 0
+		UIView.animate(withDuration: 1.25) { [weak self] in
+			self?.view?.layoutIfNeeded()
+		}
+	}
 }
 
 extension ViewerController {
@@ -303,6 +362,7 @@ extension ViewerController {
         presentedView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         presentedView.contentMode = .scaleAspectFill
         presentedView.clipsToBounds = true
+		presentedView.tintColor = tintColor
 
         return presentedView
     }
@@ -317,6 +377,7 @@ extension ViewerController {
             viewableController = ViewableController()
             viewableController.delegate = self
             viewableController.dataSource = self
+			viewableController.tintColor = tintColor
 
             let gesture = UIPanGestureRecognizer(target: self, action: #selector(ViewerController.panAction(_:)))
             gesture.delegate = self
@@ -381,11 +442,13 @@ extension ViewerController {
             footerView.alpha = 0
             self.view.addSubview(footerView)
 
+			footerViewDistToBottom = footerView.bottomAnchor.constraint(equalTo: view.compatibleBottomAnchor)
+
             NSLayoutConstraint.activate([
-                footerView.bottomAnchor.constraint(equalTo: view.compatibleBottomAnchor),
+				footerViewDistToBottom!,
                 footerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 footerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-                footerView.heightAnchor.constraint(equalToConstant: ViewerController.FooterHeight)
+				footerView.topAnchor.constraint(equalTo: view.topAnchor)
                 ])
         }
 
@@ -595,6 +658,16 @@ extension ViewerController {
 extension ViewerController: ViewableControllerDelegate {
 
     func viewableControllerDidTapItem(_: ViewableController) {
+		let textInputs: [UIView] = footerView?.subviews.first?.subviews.filter { $0 is UITextView || $0 is UITextField } ?? []
+
+		for textInput in textInputs {
+			if (textInput.isFirstResponder) {
+				textInput.resignFirstResponder()
+				return
+			}
+			break
+		}
+
         self.shouldHideStatusBar = !self.shouldHideStatusBar
         self.buttonsAreVisible = !self.buttonsAreVisible
         self.toggleButtons(self.buttonsAreVisible)
@@ -651,7 +724,8 @@ extension ViewerController: ViewableControllerContainerDataSource {
 
 extension ViewerController: ViewableControllerContainerDelegate {
     func viewableControllerContainer(_ viewableControllerContainer: ViewableControllerContainer, didMoveToIndex index: Int) {
-        let indexPath = IndexPath.indexPathForIndex(self.collectionView, index: index)!
+		self.delegate?.viewerControllerendEditing(self)
+		let indexPath = IndexPath.indexPathForIndex(self.collectionView, index: index)!
         self.evaluateCellVisibility(collectionView: self.collectionView, currentIndexPath: self.currentIndexPath, upcomingIndexPath: indexPath)
         self.currentIndexPath = indexPath
         self.delegate?.viewerController(self, didChangeFocusTo: indexPath)
